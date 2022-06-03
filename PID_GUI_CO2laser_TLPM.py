@@ -59,7 +59,7 @@ class MainWindow(baseClass):
         self.ui.load_button.clicked.connect(self.load_data)
         self.ui.close_button.clicked.connect(self.close_gui)
 
-        #self.ui.PID_checkBox.stateChanged.connect(self.PID_mode)
+        self.ui.k_doubleSpinBox.setProperty("value", self.settings.value('k'))
         self.ui.p_doubleSpinBox.setProperty("value", self.settings.value('p'))
         self.ui.i_doubleSpinBox.setProperty("value", self.settings.value('i'))
         self.ui.d_doubleSpinBox.setProperty("value", self.settings.value('d'))        
@@ -67,7 +67,6 @@ class MainWindow(baseClass):
         self.dt = self.ui.dt_SpinBox.value()
         self.setpoint = self.ui.sp_doubleSpinBox.value()
         self.ui.sp_doubleSpinBox.valueChanged.connect(self.write_power)
-        #self.ui.dt_SpinBox.valueChanged.connect(self.start_PID_timer)
         self.ui.graphwidget.setBackground('w')
         styles = {'color':'r', 'font-size':'20px'}
         self.ui.graphwidget.setLabel('left', 'Power (mW)', **styles)
@@ -91,7 +90,7 @@ class MainWindow(baseClass):
 
         self.time_0 = perf_counter()
         
-        self.Calib = 2.27
+        self.Calib = 1.69
         self.clock = np.zeros(2)
         self.counter = np.zeros(2)
         self.Error = np.zeros(2)
@@ -131,27 +130,26 @@ class MainWindow(baseClass):
             self.update_plot_data(time, pow, 0)
             
     def write_power(self, pow_in):
-        v_output = 2.27*pow_in
+        print(pow_in)
+        #v_output = (2.27*(pow_in+0.1))/1.38
+        v_output = pow_in
         self.task.write(v_output)
 
     def PID_run(self, d_t, pow_in):
-        #Measure time since last PID calculation
-        #self.clock[1] = perf_counter()
-        #d_t = self.clock[1]-self.clock[0]
         setpoint = self.ui.sp_doubleSpinBox.value()
+        K = self.ui.k_doubleSpinBox.value()
         KP = self.ui.p_doubleSpinBox.value()
         KI = self.ui.i_doubleSpinBox.value()
         KD = self.ui.d_doubleSpinBox.value()
         # Compute new output from the PID according to the systems current value, create outputs
         self.Error[1] = float(setpoint - pow_in) #error entering the PID controller
         self.Der = (self.Error[1] - self.Error[0])/d_t #derivative of the error
-        self.Int[1] = self.Int[0]+(self.Error[1] + self.Error[0])*d_t/2 #integration of the total error
-        correction = KP*self.Error[1] + KI*self.Int[1]+ KD*self.Der #the three PID terms
+        self.Int[1] = self.Int[0]+((self.Error[1] + self.Error[0])*d_t) #integration of the total error
+        correction = K*KP*self.Error[1] + K*KI*self.Int[1]+ K*KD*self.Der #the three PID terms
         # Feed the PID output to the system and get its current value
         new_power = correction + pow_in
         p_out = self._clamp(new_power, (0, 1/self.Calib))
         # Pass new values for next reading
-        #self.clock[0] = self.clock[1]
         self.Error[0] = self.Error[1]
         self.Int[0] = self.Int[1]
         return p_out, self.Error[1], correction, 
@@ -186,9 +184,7 @@ class MainWindow(baseClass):
                 self.y = self.y[1:]  # Remove the first
                 self.y.append(pow_in)  # Add a new power value.
             elif diff > 0:
-                #self.x = self.x[1:]  # Remove the first y element.
                 self.x.append(time)  # Add a new value 1 higher than the last.
-                #self.y = self.y[1:]  # Remove the first
                 self.y.append(pow_in)  # Add a new power value.
             elif diff < 0:
                 self.x = self.x[2:]  # Remove the first y element.
@@ -202,7 +198,6 @@ class MainWindow(baseClass):
         option|=QFileDialog.DontUseNativeDialog
         filename, _ =QFileDialog.getSaveFileName(self,"Save File Window Title","PowerLog.txt","All Files (*)",options=option)
         file = open(filename,'w')
-        #file.write(np.array2string(np.column_stack([self.x,self.y])))
         np.savetxt(file,np.column_stack([self.x,self.y]))
         file.close()
 
@@ -210,26 +205,26 @@ class MainWindow(baseClass):
         option=QFileDialog.Options()
         option|=QFileDialog.DontUseNativeDialog
         filename, _ = QFileDialog.getOpenFileName(self,"Load File Window Title","","Text Files (*.txt)",options=option)
-        #file = open(filename,'r')
-        #print(file.read())
-        #file.close()
         array = np.loadtxt(filename,dtype=float)
         self.x=array[:,0]
         self.y=array[:,1]
         self.data_line.setData(self.x, self.y)  # Update the data.
 
     def close_gui(self):
+        self.settings.setValue('k',self.ui.k_doubleSpinBox.value())
         self.settings.setValue('p',self.ui.p_doubleSpinBox.value())
         self.settings.setValue('i',self.ui.i_doubleSpinBox.value())
         self.settings.setValue('d',self.ui.d_doubleSpinBox.value())
         self.settings.setValue('dt',self.ui.dt_SpinBox.value())
         self.settings.setValue('int',self.ui.int_SpinBox.value())
         self.settings.setValue('win',self.ui.win_SpinBox.value())
+        if self.timer.isActive() == True:
+            self.timer.stop()
+        if self.timer2.isActive() == True:
+            self.timer2.stop()
         self.tlPM.close()
         self.task.stop() # Terminate DAQ Device
         self.task.close()
-        #self.timer1.stop()
-        #☺self.timer2.stop()
         sys.exit(app.exec_())
 
 if __name__ == '__main__':

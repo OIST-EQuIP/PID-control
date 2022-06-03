@@ -17,8 +17,8 @@
    <widget class="QCheckBox" name="PID_checkBox">
     <property name="geometry">
      <rect>
-      <x>180</x>
-      <y>120</y>
+      <x>170</x>
+      <y>80</y>
       <width>76</width>
       <height>20</height>
      </rect>
@@ -46,7 +46,7 @@
      <double>30.000000000000000</double>
     </property>
     <property name="singleStep">
-     <double>0.200000000000000</double>
+     <double>0.100000000000000</double>
     </property>
     <property name="value">
      <double>2.000000000000000</double>
@@ -65,7 +65,7 @@
      <double>20.000000000000000</double>
     </property>
     <property name="singleStep">
-     <double>0.100000000000000</double>
+     <double>0.010000000000000</double>
     </property>
    </widget>
    <widget class="QDoubleSpinBox" name="d_doubleSpinBox">
@@ -81,7 +81,7 @@
      <double>20.000000000000000</double>
     </property>
     <property name="singleStep">
-     <double>0.100000000000000</double>
+     <double>0.010000000000000</double>
     </property>
    </widget>
    <widget class="QLabel" name="label_4">
@@ -116,7 +116,7 @@
      <double>0.800000000000000</double>
     </property>
     <property name="singleStep">
-     <double>0.050000000000000</double>
+     <double>0.010000000000000</double>
     </property>
     <property name="value">
      <double>0.200000000000000</double>
@@ -413,6 +413,41 @@
     </property>
     <property name="text">
      <string>Infinite</string>
+    </property>
+   </widget>
+   <widget class="QDoubleSpinBox" name="k_doubleSpinBox">
+    <property name="geometry">
+     <rect>
+      <x>170</x>
+      <y>120</y>
+      <width>51</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <property name="singleStep">
+     <double>0.100000000000000</double>
+    </property>
+    <property name="value">
+     <double>1.000000000000000</double>
+    </property>
+   </widget>
+   <widget class="QLabel" name="k_label">
+    <property name="geometry">
+     <rect>
+      <x>150</x>
+      <y>116</y>
+      <width>18</width>
+      <height>29</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>10</pointsize>
+      <bold>true</bold>
+     </font>
+    </property>
+    <property name="text">
+     <string>K</string>
     </property>
    </widget>
   </widget>
