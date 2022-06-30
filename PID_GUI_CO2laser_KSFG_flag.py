@@ -10,14 +10,14 @@ import pyqtgraph as pg
 #from pyqtgraph import PlotWidget
 import numpy as np
 #from random import randint
-import threading
+import nidaqmx
 
 from time import perf_counter
-import nidaqmx
+import pyvisa
 from TLPM import TLPM
 from ctypes import cdll, c_uint32,byref,create_string_buffer,c_bool,c_char_p,c_int,c_double, sizeof, c_voidp
 
-Ui_Power_control, baseClass = uic.loadUiType('mainwindow.ui')
+Ui_Power_control, baseClass = uic.loadUiType('mainwindow_FG.ui')
 
 class MainWindow(baseClass):
 
@@ -30,15 +30,37 @@ class MainWindow(baseClass):
         deviceCount = c_uint32()
         self.tlPM.findRsrc(byref(deviceCount))
         self.tlPM.getRsrcName(c_int(0), resourceName)
-        print(c_char_p(resourceName.raw).value)
+        PM_label = "PowerMeter - "
+        PM_label2 = str(c_char_p(resourceName.raw).value)
+        PM_l = PM_label+PM_label2
+        print(PM_l)
         self.tlPM.open(resourceName, c_bool(True), c_bool(True))
         
         # Connect to DAQ board
         self.task = nidaqmx.Task()
-        self.task.ao_channels.add_ao_voltage_chan("Dev1/ao1",'mychannel',0,2)
+        self.task.ai_channels.add_ai_voltage_chan("Dev1/ai2")
         self.task.start()
-        print("--NI DAQ connected--")
-        
+        print('-NI DAQ connected--')
+
+        # Connect to Keysight Function Generator
+        self.rm = pyvisa.ResourceManager()
+        self.inst = self.rm.open_resource('TCPIP0::A-33521B-00505::inst0::INSTR')
+        if self.inst.resource_name.startswith('ASRL') or self.inst.resource_name.endswith('SOCKET'):  
+            self.inst.read_termination = '\n'# For Serial and TCP/IP socket connections enable the read Termination Character, or read's will timeout
+        self.inst.write('FUNction SQU')
+        self.inst.write('FUNc:SQU:DCYC +1')
+        self.inst.write('FREQ +5E+3')
+        self.inst.write('VOLT:HIGH +5')
+        self.inst.write('VOLT:LOW +0')
+        self.inst.write('OUTP 1')
+
+        self.timer = qtc.QTimer()
+        self.timer2 = qtc.QTimer()
+        self.clock = np.zeros(2)
+        self.counter = np.zeros(2)
+        self.Error = np.zeros(2)
+        self.Int = np.zeros(2)
+
         # Setup GUI
         self.ui = Ui_Power_control()
         self.ui.setupUi(self)
@@ -53,6 +75,8 @@ class MainWindow(baseClass):
         self.ui.i_doubleSpinBox.setProperty("value", self.settings.value('i'))
         self.ui.d_doubleSpinBox.setProperty("value", self.settings.value('d'))  
         self.ui.start_button.clicked.connect(self.start_plot_timer)
+        self.ui.start_button.clicked.connect(self.start_PID_timer)
+        self.ui.clear_button.clicked.connect(self.clear_data)
         self.ui.stop_button.clicked.connect(self.stop_timer)
         self.ui.save_button.clicked.connect(self.save_data)
         self.ui.load_button.clicked.connect(self.load_data)
@@ -73,25 +97,15 @@ class MainWindow(baseClass):
         pen_v = pg.mkPen(color=(0, 255, 0), width = 2)
         self.ui.graphwidget.setMouseEnabled(x=True, y=False)
         self.ui.graphwidget.setAutoVisible(x=None, y=True)
-        self.x = list(np.zeros(self.win))
-        self.y = list(np.zeros(self.win))
-        self.y_v = list(np.zeros(self.win))
+        self.x = list(np.zeros(1))
+        self.y = list(np.zeros(1))
+        self.y_v = list(np.zeros(1))
         self.data_line_v = self.ui.graphwidget.plot(self.x, self.y_v, pen=pen_v)
         self.data_line = self.ui.graphwidget.plot(self.x, self.y, pen=pen)
-        self.v_output = 0
-        self.write_power(self.setpoint)
-        self.show()
-
-        self._bufsize = int(self.win)
-        self.timer = qtc.QTimer()
-        self.timer2 = qtc.QTimer()
-        self.timer.timeout.connect(self.read_pow)
-        self.timer.start(self.dt)
-
-        self.clock = np.zeros(2)
-        self.counter = np.zeros(2)
-        self.Error = np.zeros(2)
-        self.Int = np.zeros(2)
+        self.PWM = 2
+        #self.write_power(self.setpoint)
+        self.show()  
+        self.start_PID_timer()
 
     def readTLPM(self): #Read data from input device, returns said value
         power_c =  c_double()
@@ -99,22 +113,52 @@ class MainWindow(baseClass):
         Power = power_c.value
         return (float(Power))
     
+   # def read_pow(self): #Function is called every 'dt' ms and provides input for PID and plotting
+      #  flag = self.task.read()
+       # self.clock[1] = perf_counter()
+       # time_int = self.clock[1]-self.clock[0]
+       # self.counter[1] = self.counter[0]+time_int
+       # time = self.counter[1]
+       # if self.ui.shootBox.isChecked() == False:
+        
+        #    self.pow = self.readTLPM()
+        #    self.buff_pow = [time,self.pow]
+        #    if self.ui.PID_checkBox.isChecked() == True:
+       #         p_out, self.ERR, self.PID = self.PID_run(time_int, self.pow)
+        #        self.write_power(p_out)
+        #    else:
+                
+          #          self.buff_pow = [time,self.pow]
+             #   else:
+
+        #self.clock[0] = self.clock[1]
+        #self.counter[0] = self.counter[1]
+
     def read_pow(self): #Function is called every 'dt' ms and provides input for PID and plotting
-        pow = self.readTLPM()
+        flag = self.task.read()
         self.clock[1] = perf_counter()
         time_int = self.clock[1]-self.clock[0]
         self.counter[1] = self.counter[0]+time_int
         time = self.counter[1]
-        self.buff_pow = [time,pow]
-        if self.ui.PID_checkBox.isChecked() == True:
-            p_out, self.ERR, self.PID = self.PID_run(time_int, pow)
-            self.write_power(p_out)
+        if flag > 1:
+            self.pow = self.readTLPM()
+            self.buff_pow = [time,self.pow]
+            if self.ui.PID_checkBox.isChecked() == True:
+                p_out, self.ERR, self.PID = self.PID_run(time_int, self.pow)
+                self.write_power(p_out)
+        else:
+            self.buff_pow = [time,self.pow]
+            print('shooting')
         self.clock[0] = self.clock[1]
         self.counter[0] = self.counter[1]
 
+    def start_PID_timer(self):#Start a second timer used for the plotting, usually required to be different from the PID interval 'dt'
+        self.clock[0] = perf_counter()
+        self.timer.timeout.connect(self.read_pow)
+        self.timer.start(self.dt)
+
     def start_plot_timer(self):#Start a second timer used for the plotting, usually required to be different from the PID interval 'dt'
         self.int = self.ui.int_SpinBox.value()
-        self._bufsize = int(self.win)
         self.timer2.timeout.connect(self.plot_mode)
         self.timer2.start(self.int)
 
@@ -123,11 +167,13 @@ class MainWindow(baseClass):
             self.timer.stop()
         if self.timer2.isActive() == True:
             self.timer2.stop()
-            
+         
     def write_power(self, pow_in):#Command to write voltage from output device, to be used as the feedback signal
-        self.v_output = (pow_in+0.055)/0.48
-        #v_output = pow_in
-        self.task.write(self.v_output)
+        self.PWM = (pow_in+0.384)/0.2684
+        str1 = 'FUNc:SQU:DCYC +'
+        str2 = str(self.PWM)
+        str_out = str1+str2
+        self.inst.write(str_out)
 
     def PID_run(self, d_t, pow_in):
         setpoint = self.ui.sp_doubleSpinBox.value()
@@ -140,10 +186,11 @@ class MainWindow(baseClass):
         self.Der = (self.Error[1] - self.Error[0])/d_t #derivative of the error, D
         correction = K*KP*self.Error[1] + K*KI*self.Int[1]+ K*KD*self.Der
         new_power = correction + pow_in
-        p_out = self._clamp(new_power, (0, (1*0.48)-0.056))
+#        p_out = self._clamp(new_power, (0, (14*0.2684)-0.384))
+        p_out = self._clamp(new_power, (0, 2.5))
         self.Error[0] = self.Error[1]# Pass new values for next reading
         self.Int[0] = self.Int[1]
-        return p_out, self.Error[1], correction, 
+        return p_out, self.Error[1], correction
 
     def _clamp(self, value, limits): #If output value goes outside the limits, _clamp will keep the value at the given limit value
         lower, upper = limits
@@ -161,9 +208,11 @@ class MainWindow(baseClass):
             self.update_plot_data(time, pow, self.PID)
         else:
            self.update_plot_data(time, pow, 0)
-        self.ui.v_out_disp.display(self.v_output)
+        self.ui.v_out_disp.display(self.PWM)
 
     def update_plot_data(self, time, pow_in, error): #Updates the plot with new values of time and pow_in. Plot resizes depending on 'window'
+        #self.win = round(self.ui.win_SpinBox.value()/self.ui.int_SpinBox.value())
+        #print(pow_in)
         self.win = self.ui.win_SpinBox.value()
         diff = self.win-len(self.x)
         if self.ui.inf_checkBox.isChecked() == True:
@@ -193,8 +242,7 @@ class MainWindow(baseClass):
             self.data_line_v.setData(self.x, self.y_v)  # Update the data.self.data_line_v.setData(self.x,self.y)  # Update the data.
         else:
             self.data_line_v.setData(self.x, self.y)  # Update the data.self.data_line_v.setData(self.x,self.y)  # Update the data.
-        self.data_line.setData(self.x, self.y)  # Update the data
-         
+        self.data_line.setData(self.x, self.y)  # Update the data     
 
     def save_data(self): #Save the data that has been plotted
         option=QFileDialog.Options()
@@ -211,8 +259,17 @@ class MainWindow(baseClass):
         array = np.loadtxt(filename,dtype=float)
         self.x=array[:,0]
         self.y=array[:,1]
+        self.y_v = list(np.zeros(self.win))
         self.data_line.setData(self.x, self.y)  # Update the data.
+        self.data_line_v.setData(self.y_v, self.y_v)  # Update the data.
 
+    def clear_data(self): #Clear Data
+        self.x = list(np.zeros(self.win))
+        self.y = list(np.zeros(self.win))
+        self.y_v = list(np.zeros(self.win))
+        self.data_line.setData(self.x, self.y)
+        self.data_line_v.setData(self.x, self.y_v)
+   
     def close_gui(self):#Close the GUI, must be used instead of closing window with top right x in order to close the connections to hardware safely
         self.settings.setValue('k',self.ui.k_doubleSpinBox.value())
         self.settings.setValue('p',self.ui.p_doubleSpinBox.value())
@@ -226,6 +283,8 @@ class MainWindow(baseClass):
         if self.timer2.isActive() == True:
             self.timer2.stop()
         self.tlPM.close()
+        self.inst.close() # close connection to function generator
+        self.rm.close()
         self.task.stop() # Terminate DAQ Device
         self.task.close()
         sys.exit(app.exec_())

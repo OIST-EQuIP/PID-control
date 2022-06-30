@@ -70,6 +70,7 @@ class MainWindow(baseClass):
         #Base timer used for PID and plotting. This runs in background even if PID not activated. Plotting function samples the data according to 'Interval'
         self._bufsize = int(self.win)
         self.timer = qtc.QTimer()
+        self.timer2 = qtc.QTimer() #create, but don't activate second timer used for plotting
         self.timer.timeout.connect(self.bkgnd_read)
         self.timer.start(self.dt)
 
@@ -103,7 +104,6 @@ class MainWindow(baseClass):
     def start_plot_timer(self): #Start a second timer used for the plotting, usually required to be different from the PID interval 'dt'
         self.int = self.ui.int_SpinBox.value() #Determine timer interval from GUI
         self._bufsize = int(self.win)
-        self.timer2 = qtc.QTimer()
         self.timer2.timeout.connect(self.plot_mode)
         self.timer2.start(self.int)
 
@@ -136,7 +136,7 @@ class MainWindow(baseClass):
         self.Int[1] = self.Int[0]+((self.Error[1] + self.Error[0])*d_t) #integration of the total error, I
         self.Der = (self.Error[1] - self.Error[0])/d_t #derivative of the error, D
         correction = K*KP*self.Error[1] + K*KI*self.Int[1]+ K*KD*self.Der
-        new_power = correction + pow_in #Feed the PID output to the system and get its current value
+        new_power = correction + pow_in
         p_out = self._clamp(new_power, (0, 1/self.Calib)) #Limit output between 0 and 1 for safety (if output driver does not already do this)
         self.Error[0] = self.Error[1]# Pass new values for next reading
         self.Int[0] = self.Int[1]
