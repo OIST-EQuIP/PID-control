@@ -147,6 +147,7 @@ class MainWindow(baseClass):
                 p_out, self.ERR, self.PID = self.PID_run(time_int, self.pow)
                 self.write_power(p_out)
         else:
+            #self.pow = self.readTLPM()
             self.buff_pow = [time,self.pow]
             print('shooting')
         self.clock[0] = self.clock[1]
