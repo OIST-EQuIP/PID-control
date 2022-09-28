@@ -78,7 +78,7 @@
       <enum>QLCDNumber::Flat</enum>
      </property>
      <property name="value" stdset="0">
-      <double>0.255000000000000</double>
+      <double>0.000000000000000</double>
      </property>
     </widget>
     <widget class="QDoubleSpinBox" name="p_doubleSpinBox">
@@ -105,7 +105,7 @@
       <rect>
        <x>380</x>
        <y>20</y>
-       <width>21</width>
+       <width>51</width>
        <height>21</height>
       </rect>
      </property>
@@ -116,7 +116,7 @@
       </font>
      </property>
      <property name="text">
-      <string>dt</string>
+      <string>dt (ms)</string>
      </property>
     </widget>
     <widget class="QSplitter" name="splitter">
